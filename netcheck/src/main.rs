@@ -24,8 +24,8 @@ use internal_comms::FetchedDataMessage;
 
 mod fetch_local;
 
-const BLOCK_HEIGHT: u16 = 5;
-const BLOCK_WIDTH: u16 = 40;
+const BLOCK_HEIGHT: u16 = 10;
+const BLOCK_WIDTH: u16 = 30;
 
 fn main() -> Result<()> {
     errors::install_hooks()?;
@@ -77,6 +77,7 @@ pub struct App {
     interface_hover_index: usize,
     chosen_interface: Option<String>,
     receive_new_data_channel: Option<mpsc::Receiver<FetchedDataMessage>>,
+    block_width_practice: u32,
 }
 
 impl App {
@@ -108,7 +109,7 @@ impl App {
         Ok(())
     }
 
-    fn render_frame(&self, frame: &mut Frame) {
+    fn render_frame(&mut self, frame: &mut Frame) {
         match self.stage {
             ApplicationStage::PickInterface => self.pick_interface_render_frame(frame),
             ApplicationStage::Running => self.running_render_frame(frame),
@@ -169,11 +170,13 @@ impl App {
     }
     
 
-    fn running_render_frame(&self, frame: &mut Frame) {
+    fn running_render_frame(&mut self, frame: &mut Frame) {
         let area = frame.size();
         let buf = frame.buffer_mut();
 
-        let title = Title::from(" NETCHECK ".bold());
+        let interface_name = self.chosen_interface.as_ref().unwrap();
+
+        let title = Title::from(format!(" NETCHECK | {} ", interface_name).bold());
         let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]));
         let exterior_block = Block::default()
             .title(title.alignment(Alignment::Center))
@@ -190,6 +193,8 @@ impl App {
 
         let columns = inner_area.width / BLOCK_WIDTH;
         let column_width = inner_area.width / columns;
+        self.block_width_practice = column_width as u32;
+
         let mut blocks = Vec::new();
 
         blocks.push(self.render_network_info(inner_area));
@@ -299,7 +304,7 @@ impl App {
     fn render_network_info(&self, area: Rect) -> Paragraph {
         let mut text = Vec::with_capacity(3);
 
-        let max_width = BLOCK_WIDTH as usize;
+        let max_width = self.block_width_practice as usize - 2;
         
         match &self.network_info.local_info.local_ip {
             Some(local_ip) => {
@@ -375,6 +380,7 @@ impl App {
             Line::from("Reverse DNS: example.com"),
             Line::from("ISP: Example ISP"),
             Line::from("Location: Somewhere, Earth"),
+            Line::from("Cloudflare Ping: 1ms")
         ];
         Paragraph::new(Text::from(text)).block(
             Block::default()

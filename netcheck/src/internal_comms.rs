@@ -1,7 +1,6 @@
 pub enum FetchedDataMessage {
     LocalInfo(LocalInfo),
     InternetInfo(InternetInfo),
-    SpeedInfo(SpeedInfo),
     DHCPInfo(DHCPInfo),
     DNSInfo(DNSInfo),
     Traceroute(Traceroute),
@@ -17,7 +16,6 @@ pub enum FetchedDataMessage {
 pub struct NetworkInfo {
     pub local_info: LocalInfo,
     pub internet_info: InternetInfo,
-    pub speed_info: SpeedInfo,
     pub dhcp_info: DHCPInfo,
     pub dns_info: DNSInfo,
     pub traceroute: Traceroute,
@@ -43,12 +41,7 @@ pub struct InternetInfo {
     pub reverse_dns: Option<String>,
     pub isp: Option<String>,
     pub location: Option<String>,
-}
-
-#[derive(Debug, Default)]
-pub struct SpeedInfo {
-    pub download_speed: Option<f64>,
-    pub upload_speed: Option<f64>,
+    pub cloudflare_ping: Option<f64>,
 }
 
 #[derive(Debug, Default)]
@@ -92,12 +85,14 @@ pub struct TCPInfo {
 pub struct HTTPInfo {
     pub can_access_1111: Option<bool>,
     pub can_access_google: Option<bool>,
+    pub captive_portal: Option<bool>,
 }
 
 #[derive(Debug, Default)]
 pub struct HTTPSInfo {
     pub can_access_1111: Option<bool>,
     pub can_access_google: Option<bool>,
+    pub mitm_detected: Option<bool>,
 }
 
 #[derive(Debug, Default)]
