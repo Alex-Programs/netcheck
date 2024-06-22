@@ -11,140 +11,92 @@ use ratatui::{
         *,
     },
 };
-use std::net::IpAddr;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+
+use std::thread;
 
 mod errors;
 mod tui;
+mod netlib;
+mod internal_comms;
+use internal_comms::FetchedDataMessage;
+
+mod fetch_local;
+
+const BLOCK_HEIGHT: u16 = 5;
+const BLOCK_WIDTH: u16 = 40;
 
 fn main() -> Result<()> {
     errors::install_hooks()?;
     let mut terminal = tui::init()?;
-    App::default().run(&mut terminal)?;
+
+    let mut app = App::default();
+
+    // Get list of network interfaces
+    let interface_list = netlib::get_interfaces();
+
+    // If there are no interfaces, bail out
+    if interface_list.is_empty() {
+        bail!("No network interfaces found");
+    }
+
+    // If there is one, automatically select it
+    if interface_list.len() == 1 {
+        app.chosen_interface = Some(interface_list[0].clone());
+        app.interface_list = interface_list;
+        app.stage = ApplicationStage::Running;
+    } else {
+        app.interface_list = interface_list;
+    }
+
+    app.run(&mut terminal)?;
     tui::restore()?;
     Ok(())
+}
+
+#[derive(Debug)]
+enum ApplicationStage {
+    PickInterface,
+    Running,
+}
+
+impl Default for ApplicationStage {
+    fn default() -> Self {
+        ApplicationStage::PickInterface
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct App {
     exit: bool,
-    network_info: NetworkInfo,
+    network_info: internal_comms::NetworkInfo,
     throbber_state: throbber_widgets_tui::ThrobberState,
-}
-
-#[derive(Debug, Default)]
-pub struct NetworkInfo {
-    local_info: LocalInfo,
-    internet_info: InternetInfo,
-    speed_info: SpeedInfo,
-    dhcp_info: DHCPInfo,
-    dns_info: DNSInfo,
-    traceroute: Traceroute,
-    tcp_info: TCPInfo,
-    http_info: HTTPInfo,
-    https_info: HTTPSInfo,
-    udp_info: UDPInfo,
-    ntp_info: NTPInfo,
-    quic_info: QUICInfo,
-}
-
-#[derive(Debug, Default)]
-pub struct LocalInfo {
-    local_ip: Option<IpAddr>,
-    subnet_mask: Option<IpAddr>,
-    gateway: Option<IpAddr>,
-}
-
-#[derive(Debug, Default)]
-pub struct InternetInfo {
-    public_ip: Option<IpAddr>,
-    asn: Option<u32>,
-    reverse_dns: Option<String>,
-    isp: Option<String>,
-    location: Option<String>,
-}
-
-#[derive(Debug, Default)]
-pub struct SpeedInfo {
-    download_speed: Option<f64>,
-    upload_speed: Option<f64>,
-}
-
-#[derive(Debug, Default)]
-pub struct DHCPInfo {
-    dhcp_server: Option<IpAddr>,
-    lease_time: Option<u32>,
-    last_renewed: Option<u32>,
-    dhcp_declared_dns: Option<Vec<IpAddr>>,
-}
-
-#[derive(Debug, Default)]
-pub struct DNSInfo {
-    primary_dns: Option<IpAddr>,
-    can_access_primary: Option<bool>,
-    secondary_dns: Option<IpAddr>,
-    can_access_secondary: Option<bool>,
-    tertiary_dns: Option<IpAddr>,
-    can_access_tertiary: Option<bool>,
-    dhcp_declared_dns: Option<Vec<IpAddr>>,
-    can_access_dhcp_dns: Option<bool>,
-}
-
-#[derive(Debug, Default)]
-pub struct Traceroute {
-    hops: Vec<TracerouteHop>,
-}
-
-#[derive(Debug)]
-pub struct TracerouteHop {
-    hop_number: u8,
-    ip: IpAddr,
-    latency: f64,
-    jitter: f64,
-    location: Option<String>,
-}
-
-#[derive(Debug, Default)]
-pub struct TCPInfo {
-    attempted_to_talk_on_list: Vec<(u16, bool)>,
-}
-
-#[derive(Debug, Default)]
-pub struct HTTPInfo {
-    can_access_1111: Option<bool>,
-    can_access_google: Option<bool>,
-}
-
-#[derive(Debug, Default)]
-pub struct HTTPSInfo {
-    can_access_1111: Option<bool>,
-    can_access_google: Option<bool>,
-}
-
-#[derive(Debug, Default)]
-pub struct UDPInfo {
-    attempted_to_talk_on_list: Vec<(u16, bool)>,
-}
-
-#[derive(Debug, Default)]
-pub struct NTPInfo {
-    do_use_ntp: Option<bool>,
-    ntp_server: Option<IpAddr>,
-    can_access_ntp: Option<bool>,
-    local_time: Option<u64>,
-    server_time: Option<u64>,
-}
-
-#[derive(Debug, Default)]
-pub struct QUICInfo {
-    can_access_1111: Option<bool>,
-    can_access_google: Option<bool>,
+    stage: ApplicationStage,
+    interface_list: Vec<String>,
+    interface_hover_index: usize,
+    chosen_interface: Option<String>,
+    receive_new_data_channel: Option<mpsc::Receiver<FetchedDataMessage>>,
 }
 
 impl App {
     /// runs the application's main loop until the user quits
     pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<()> {
         while !self.exit {
+            // Pull in any new data from the channel
+            if let Some(ref receive_new_data_channel) = self.receive_new_data_channel {
+                for message in receive_new_data_channel.try_iter() {
+                    match message {
+                        FetchedDataMessage::LocalInfo(local_info) => {
+                            self.network_info.local_info = local_info;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
             terminal.draw(|frame| self.render_frame(frame))?;
+
             self.handle_events().wrap_err("handle events failed")?;
 
             // Update the throbber state
@@ -157,14 +109,72 @@ impl App {
     }
 
     fn render_frame(&self, frame: &mut Frame) {
+        match self.stage {
+            ApplicationStage::PickInterface => self.pick_interface_render_frame(frame),
+            ApplicationStage::Running => self.running_render_frame(frame),
+        }
+    }
+
+    fn pick_interface_render_frame(&self, frame: &mut Frame) {
+        let area = frame.size();
+        let buf = frame.buffer_mut();
+    
+        let title = Title::from(" NETCHECK ".bold());
+    
+        let instructions = Title::from(Line::from(vec![
+            " Quit ".into(), "<Q> ".blue().bold(),
+            " Up ".into(), "↑".blue().bold(),
+            " Down ".into(), "↓".blue().bold(),
+            " Select ".into(), "<Enter>".blue().bold(),
+        ]));
+    
+        let exterior_block = Block::default()
+            .title(title.alignment(Alignment::Center))
+            .title(
+                instructions
+                    .alignment(Alignment::Center)
+                    .position(Position::Bottom),
+            )
+            .borders(Borders::TOP)
+            .border_set(border::THICK);
+    
+        let inner_area = exterior_block.inner(area);
+    
+        exterior_block.render(area, buf);
+    
+        // Insert a subtitle of "Pick an interface"
+        let subtitle = Title::from(" Pick an interface ".bold());
+    
+        let interfaces_block = Block::default()
+            .borders(Borders::ALL)
+            .title_alignment(Alignment::Left)
+            .title(subtitle);
+    
+        let interface_area = interfaces_block.inner(inner_area);
+    
+        let interface_items: Vec<ListItem> = self.interface_list.iter().enumerate().map(|(i, interface)| {
+            let content = if self.interface_hover_index == i {
+                Line::from(vec![Span::styled(format!("> {}", interface).to_string(), Style::default().add_modifier(Modifier::BOLD))])
+            } else {
+                Line::from(interface.to_string())
+            };
+            ListItem::new(content)
+        }).collect();
+    
+        let interface_list = List::new(interface_items)
+            .block(Block::default().borders(Borders::NONE));
+    
+        interfaces_block.render(inner_area, buf);
+        frame.render_widget(interface_list, interface_area);
+    }
+    
+
+    fn running_render_frame(&self, frame: &mut Frame) {
         let area = frame.size();
         let buf = frame.buffer_mut();
 
         let title = Title::from(" NETCHECK ".bold());
-        let instructions = Title::from(Line::from(vec![
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]));
+        let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]));
         let exterior_block = Block::default()
             .title(title.alignment(Alignment::Center))
             .title(
@@ -177,9 +187,6 @@ impl App {
 
         let inner_area = exterior_block.inner(area);
         exterior_block.render(area, buf);
-
-        let BLOCK_HEIGHT = 5;
-        let BLOCK_WIDTH = 40;
 
         let columns = inner_area.width / BLOCK_WIDTH;
         let column_width = inner_area.width / columns;
@@ -245,23 +252,120 @@ impl App {
         match key_event.code {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Char('Q') => self.exit(),
+            KeyCode::Up => {
+                if let ApplicationStage::PickInterface = self.stage {
+                    if self.interface_hover_index > 0 {
+                        self.interface_hover_index -= 1;
+                    }
+                }
+            },
+            KeyCode::Down => {
+                if let ApplicationStage::PickInterface = self.stage {
+                    if self.interface_hover_index < self.interface_list.len() - 1 {
+                        self.interface_hover_index += 1;
+                    }
+                }
+            },
+            KeyCode::Enter => {
+                if let ApplicationStage::PickInterface = self.stage {
+                    self.chosen_interface = Some(self.interface_list[self.interface_hover_index].clone());
+                    self.stage = ApplicationStage::Running;
+
+                    // Initialise fetching of network information
+                    self.initialise_interface_fetching();
+                }
+            },
             _ => {}
         }
         Ok(())
+    }
+
+    fn initialise_interface_fetching(&mut self) {
+        let (send, receive): (Sender<FetchedDataMessage>, Receiver<FetchedDataMessage>) = mpsc::channel();
+
+        self.receive_new_data_channel = Some(receive);
+
+        let chosen_interface = self.chosen_interface.clone().unwrap();
+
+        thread::spawn(move || {
+            fetch_local::fetch_and_return_local_info(send, &chosen_interface);
+        });
     }
 
     fn exit(&mut self) {
         self.exit = true;
     }
 
-    fn render_network_info(&self, _area: Rect) -> Paragraph {
-        let text = vec![
-            Line::from("Local IP: 192.168.0.1"),
-            Line::from("Subnet Mask: 255.255.255.0"),
-            Line::from("Gateway: 192.168.0.254"),
-        ];
+    fn render_network_info(&self, area: Rect) -> Paragraph {
+        let mut text = Vec::with_capacity(3);
+
+        let max_width = BLOCK_WIDTH as usize;
+        
+        match &self.network_info.local_info.local_ip {
+            Some(local_ip) => {
+                let ip_str = local_ip.to_string();
+                let padding = max_width.saturating_sub("Local IP: ".len() + ip_str.len());
+
+                text.push(Line::from(vec![
+                    Span::styled("Local IP: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled(ip_str, Style::default().fg(Color::Green)),
+                ]));
+            }
+            None => {
+                let padding = max_width.saturating_sub("Local IP: Unknown".len());
+                text.push(Line::from(vec![
+                    Span::styled("Local IP: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled("Unknown", Style::default().fg(Color::Red)),
+                ]));
+            }
+        }
+    
+        match &self.network_info.local_info.subnet_mask {
+            Some(subnet_mask) => {
+                let mask_str = subnet_mask.to_string();
+                let padding = max_width.saturating_sub("Subnet Mask: ".len() + mask_str.len());
+                text.push(Line::from(vec![
+                    Span::styled("Subnet Mask: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled(mask_str, Style::default().fg(Color::Green)),
+                ]));
+            }
+            None => {
+                let padding = max_width.saturating_sub("Subnet Mask: Unknown".len());
+                text.push(Line::from(vec![
+                    Span::styled("Subnet Mask: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled("Unknown", Style::default().fg(Color::Red)),
+                ]));
+            }
+        }
+    
+        match &self.network_info.local_info.gateway {
+            Some(gateway) => {
+                let gateway_str = gateway.to_string();
+                let padding = max_width.saturating_sub("Gateway: ".len() + gateway_str.len());
+                text.push(Line::from(vec![
+                    Span::styled("Gateway: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled(gateway_str, Style::default().fg(Color::Green)),
+                ]));
+            }
+            None => {
+                let padding = max_width.saturating_sub("Gateway: Unknown".len());
+                text.push(Line::from(vec![
+                    Span::styled("Gateway: ", Style::default().bold()),
+                    Span::raw(" ".repeat(padding)),
+                    Span::styled("Unknown", Style::default().fg(Color::Red)),
+                ]));
+            }
+        }
+
+        let title = Span::styled("Network Info", Style::default().add_modifier(Modifier::BOLD));
+    
         Paragraph::new(Text::from(text))
-            .block(Block::default().title("Network Info").borders(Borders::ALL))
+            .block(Block::default().title(title).borders(Borders::ALL))
     }
 
     fn render_internet_info(&self, _area: Rect) -> Paragraph {
@@ -272,8 +376,11 @@ impl App {
             Line::from("ISP: Example ISP"),
             Line::from("Location: Somewhere, Earth"),
         ];
-        Paragraph::new(Text::from(text))
-            .block(Block::default().title("Internet Info").borders(Borders::ALL))
+        Paragraph::new(Text::from(text)).block(
+            Block::default()
+                .title("Internet Info")
+                .borders(Borders::ALL),
+        )
     }
 
     fn render_dhcp_info(&self, _area: Rect) -> Paragraph {
@@ -305,8 +412,11 @@ impl App {
             Line::from("Hop 2: 203.0.113.1 - Latency: 10ms"),
             Line::from("Hop 3: 198.51.100.1 - Latency: 20ms"),
         ];
-        Paragraph::new(Text::from(text))
-            .block(Block::default().title("Traceroute Info").borders(Borders::ALL))
+        Paragraph::new(Text::from(text)).block(
+            Block::default()
+                .title("Traceroute Info")
+                .borders(Borders::ALL),
+        )
     }
 
     fn render_tcp_info(&self, _area: Rect) -> Paragraph {
