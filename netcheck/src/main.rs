@@ -161,7 +161,10 @@ impl App {
         let buf = frame.buffer_mut();
 
         let title = Title::from(" NETCHECK ".bold());
-        let instructions = Title::from(Line::from(vec![" Quit ".into(), "<Q> ".blue().bold()]));
+        let instructions = Title::from(Line::from(vec![
+            " Quit ".into(),
+            "<Q> ".blue().bold(),
+        ]));
         let exterior_block = Block::default()
             .title(title.alignment(Alignment::Center))
             .title(
@@ -175,7 +178,7 @@ impl App {
         let inner_area = exterior_block.inner(area);
         exterior_block.render(area, buf);
 
-        let BLOCK_HEIGHT = 10;
+        let BLOCK_HEIGHT = 5;
         let BLOCK_WIDTH = 40;
 
         let columns = inner_area.width / BLOCK_WIDTH;
@@ -212,10 +215,13 @@ impl App {
         for (i, block) in blocks.into_iter().enumerate() {
             let col = i % columns as usize;
             let row = i / columns as usize;
-            if row < rows.height as usize {
+            let y_position = columns_layout[col].y + row as u16 * BLOCK_HEIGHT;
+
+            // Ensure the block is within the terminal area
+            if y_position + BLOCK_HEIGHT <= area.height {
                 let rect = Rect::new(
                     columns_layout[col].x,
-                    columns_layout[col].y + row as u16 * BLOCK_HEIGHT, // Assuming each block is 10 lines high
+                    y_position,
                     column_width,
                     BLOCK_HEIGHT,
                 );
@@ -224,7 +230,6 @@ impl App {
         }
     }
 
-    /// updates the application's state based on user input
     fn handle_events(&mut self) -> Result<()> {
         match event::read()? {
             // it's important to check that the event is a key press event as
@@ -249,7 +254,7 @@ impl App {
         self.exit = true;
     }
 
-    fn render_network_info(&self, area: Rect) -> Paragraph {
+    fn render_network_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Local IP: 192.168.0.1"),
             Line::from("Subnet Mask: 255.255.255.0"),
@@ -259,7 +264,7 @@ impl App {
             .block(Block::default().title("Network Info").borders(Borders::ALL))
     }
 
-    fn render_internet_info(&self, area: Rect) -> Paragraph {
+    fn render_internet_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Public IP: 203.0.113.1"),
             Line::from("ASN: 12345"),
@@ -267,14 +272,11 @@ impl App {
             Line::from("ISP: Example ISP"),
             Line::from("Location: Somewhere, Earth"),
         ];
-        Paragraph::new(Text::from(text)).block(
-            Block::default()
-                .title("Internet Info")
-                .borders(Borders::ALL),
-        )
+        Paragraph::new(Text::from(text))
+            .block(Block::default().title("Internet Info").borders(Borders::ALL))
     }
 
-    fn render_dhcp_info(&self, area: Rect) -> Paragraph {
+    fn render_dhcp_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("DHCP Server: 192.168.0.1"),
             Line::from("Lease Time: 86400"),
@@ -284,7 +286,7 @@ impl App {
             .block(Block::default().title("DHCP Info").borders(Borders::ALL))
     }
 
-    fn render_dns_info(&self, area: Rect) -> Paragraph {
+    fn render_dns_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Primary DNS: 8.8.8.8"),
             Line::from("Can Access Primary: Yes"),
@@ -297,20 +299,17 @@ impl App {
             .block(Block::default().title("DNS Info").borders(Borders::ALL))
     }
 
-    fn render_traceroute_info(&self, area: Rect) -> Paragraph {
+    fn render_traceroute_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Hop 1: 192.168.0.1 - Latency: 1ms"),
             Line::from("Hop 2: 203.0.113.1 - Latency: 10ms"),
             Line::from("Hop 3: 198.51.100.1 - Latency: 20ms"),
         ];
-        Paragraph::new(Text::from(text)).block(
-            Block::default()
-                .title("Traceroute Info")
-                .borders(Borders::ALL),
-        )
+        Paragraph::new(Text::from(text))
+            .block(Block::default().title("Traceroute Info").borders(Borders::ALL))
     }
 
-    fn render_tcp_info(&self, area: Rect) -> Paragraph {
+    fn render_tcp_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Port 80: Success"),
             Line::from("Port 443: Success"),
@@ -320,7 +319,7 @@ impl App {
             .block(Block::default().title("TCP Info").borders(Borders::ALL))
     }
 
-    fn render_http_info(&self, area: Rect) -> Paragraph {
+    fn render_http_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Can Access 1.1.1.1: Yes"),
             Line::from("Can Access Google: Yes"),
@@ -329,7 +328,7 @@ impl App {
             .block(Block::default().title("HTTP Info").borders(Borders::ALL))
     }
 
-    fn render_https_info(&self, area: Rect) -> Paragraph {
+    fn render_https_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Can Access 1.1.1.1: Yes"),
             Line::from("Can Access Google: Yes"),
@@ -338,7 +337,7 @@ impl App {
             .block(Block::default().title("HTTPS Info").borders(Borders::ALL))
     }
 
-    fn render_udp_info(&self, area: Rect) -> Paragraph {
+    fn render_udp_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Port 53: Success"),
             Line::from("Port 123: Success"),
@@ -347,7 +346,7 @@ impl App {
             .block(Block::default().title("UDP Info").borders(Borders::ALL))
     }
 
-    fn render_ntp_info(&self, area: Rect) -> Paragraph {
+    fn render_ntp_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Use NTP: Yes"),
             Line::from("NTP Server: 129.6.15.28"),
@@ -359,7 +358,7 @@ impl App {
             .block(Block::default().title("NTP Info").borders(Borders::ALL))
     }
 
-    fn render_quic_info(&self, area: Rect) -> Paragraph {
+    fn render_quic_info(&self, _area: Rect) -> Paragraph {
         let text = vec![
             Line::from("Can Access 1.1.1.1: Yes"),
             Line::from("Can Access Google: Yes"),
