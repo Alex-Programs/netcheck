@@ -11,7 +11,6 @@ use ratatui::{
         *,
     },
 };
-
 use std::net::IpAddr;
 
 mod errors;
@@ -257,60 +256,120 @@ impl Widget for &App {
         }
 
         for (widget, rect) in widgets {
-            widget.render(rect, buf);
+            widget.render(rect, buf); // Render each widget directly using its render method
         }
     }
 }
 
-fn render_network_info(area: &Rect) -> Block {
-    let block = Block::default()
-        .title("Network Info")
-        .borders(Borders::ALL)
-        .border_set(border::THICK);
-
-    
+fn render_network_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Local IP: 192.168.0.1"),
+        Line::from("Subnet Mask: 255.255.255.0"),
+        Line::from("Gateway: 192.168.0.254"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("Network Info").borders(Borders::ALL))
 }
 
-fn render_internet_info(area: &Rect) -> Block {
-    Block::default()
-        .title("Internet Info")
-        .borders(Borders::ALL)
+fn render_internet_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Public IP: 203.0.113.1"),
+        Line::from("ASN: 12345"),
+        Line::from("Reverse DNS: example.com"),
+        Line::from("ISP: Example ISP"),
+        Line::from("Location: Somewhere, Earth"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("Internet Info").borders(Borders::ALL))
 }
 
-fn render_dhcp_info(area: &Rect) -> Block {
-    Block::default().title("DHCP Info").borders(Borders::ALL)
+fn render_dhcp_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("DHCP Server: 192.168.0.1"),
+        Line::from("Lease Time: 86400"),
+        Line::from("Last Renewed: 43200"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("DHCP Info").borders(Borders::ALL))
 }
 
-fn render_dns_info(area: &Rect) -> Block {
-    Block::default().title("DNS Info").borders(Borders::ALL)
+fn render_dns_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Primary DNS: 8.8.8.8"),
+        Line::from("Can Access Primary: Yes"),
+        Line::from("Secondary DNS: 8.8.4.4"),
+        Line::from("Can Access Secondary: Yes"),
+        Line::from("Tertiary DNS: 1.1.1.1"),
+        Line::from("Can Access Tertiary: Yes"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("DNS Info").borders(Borders::ALL))
 }
 
-fn render_traceroute_info(area: &Rect) -> Block {
-    Block::default()
-        .title("Traceroute Info")
-        .borders(Borders::ALL)
+fn render_traceroute_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Hop 1: 192.168.0.1 - Latency: 1ms"),
+        Line::from("Hop 2: 203.0.113.1 - Latency: 10ms"),
+        Line::from("Hop 3: 198.51.100.1 - Latency: 20ms"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("Traceroute Info").borders(Borders::ALL))
 }
 
-fn render_tcp_info(area: &Rect) -> Block {
-    Block::default().title("TCP Info").borders(Borders::ALL)
+fn render_tcp_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Port 80: Success"),
+        Line::from("Port 443: Success"),
+        Line::from("Port 8080: Fail"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("TCP Info").borders(Borders::ALL))
 }
 
-fn render_http_info(area: &Rect) -> Block {
-    Block::default().title("HTTP Info").borders(Borders::ALL)
+fn render_http_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Can Access 1.1.1.1: Yes"),
+        Line::from("Can Access Google: Yes"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("HTTP Info").borders(Borders::ALL))
 }
 
-fn render_https_info(area: &Rect) -> Block {
-    Block::default().title("HTTPS Info").borders(Borders::ALL)
+fn render_https_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Can Access 1.1.1.1: Yes"),
+        Line::from("Can Access Google: Yes"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("HTTPS Info").borders(Borders::ALL))
 }
 
-fn render_udp_info(area: &Rect) -> Block {
-    Block::default().title("UDP Info").borders(Borders::ALL)
+fn render_udp_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Port 53: Success"),
+        Line::from("Port 123: Success"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("UDP Info").borders(Borders::ALL))
 }
 
-fn render_ntp_info(area: &Rect) -> Block {
-    Block::default().title("NTP Info").borders(Borders::ALL)
+fn render_ntp_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Use NTP: Yes"),
+        Line::from("NTP Server: 129.6.15.28"),
+        Line::from("Can Access NTP: Yes"),
+        Line::from("Local Time: 1627890123"),
+        Line::from("Server Time: 1627890124"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("NTP Info").borders(Borders::ALL))
 }
 
-fn render_quic_info(area: &Rect) -> Block {
-    Block::default().title("QUIC Info").borders(Borders::ALL)
+fn render_quic_info(area: &Rect) -> Paragraph {
+    let text = vec![
+        Line::from("Can Access 1.1.1.1: Yes"),
+        Line::from("Can Access Google: Yes"),
+    ];
+    Paragraph::new(Text::from(text))
+        .block(Block::default().title("QUIC Info").borders(Borders::ALL))
 }
