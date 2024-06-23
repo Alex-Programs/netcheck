@@ -35,6 +35,17 @@ pub fn fetch_and_return_local_info(tx: Sender<FetchedDataMessage>, interface: St
     }
 }
 
+pub fn get_interface_ip(interface: &String) -> Result<String, ()> {
+    let interfaces = pnet::datalink::interfaces();
+    for iface in interfaces {
+        if iface.name == *interface {
+            return Ok(iface.ips[0].ip().to_string());
+        }
+    }
+
+    Err(())
+}
+
 fn get_default_gateway(interface: &String) -> Result<String, ()> {
     let output = Command::new("ip")
         .arg("route")

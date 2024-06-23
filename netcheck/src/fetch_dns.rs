@@ -12,6 +12,8 @@ use resolv_conf::Config;
 use std::net::UdpSocket;
 use std::time::Duration;
 
+use crate::fetch_local::get_interface_ip;
+
 pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: String) {
     let dns_servers = get_dns_servers();
 
@@ -20,14 +22,18 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
         Err(_) => {
             tx.send(FetchedDataMessage::DNSInfo(DNSInfo {
                 can_fetch: Some(false),
+                can_bind_interface: None,
                 dns_servers: Vec::new(),
             })).unwrap();
             return;
         }
     };
 
+    let interface_ip = get_interface_ip(&interface);
+
     let mut dns_info = DNSInfo {
         can_fetch: Some(true),
+        can_bind_interface: None,
         dns_servers: dns_servers.iter().map(|server| DNSServer {
             ip: server.to_string(),
             can_resolve: None,
@@ -39,6 +45,8 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
     // Now start checking if we can resolve DNS through them
 
     for server in dns_servers {
+        let start_time = std::time::Instant::now();
+
         let can_resolve = check_dns_resolution(&server);
 
         for dns_server in dns_info.dns_servers.iter_mut() {
@@ -50,6 +58,14 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
         }
 
         tx.send(FetchedDataMessage::DNSInfo(dns_info.clone())).unwrap();
+
+        // Ensure at least 50ms between checks
+        let min_time = Duration::from_millis(50);
+        let elapsed = start_time.elapsed();
+
+        if elapsed < min_time {
+            std::thread::sleep(min_time - elapsed);
+        }
     }
 }
 
@@ -60,13 +76,24 @@ fn check_dns_resolution(server: &str) -> bool {
 
     let message = message.to_vec().unwrap();
 
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let socket = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(socket) => socket,
+        Err(_) => return false
+    };
 
-    socket.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
+    if socket.set_read_timeout(Some(Duration::from_secs(1))).is_err() {
+        return false;
+    }
 
-    socket.connect(format!("{}:53", server)).unwrap();
+    if socket.connect(format!("{}:53", server)).is_err() {
+        return false;
+    }
 
-    socket.send(&message).unwrap();
+    let sent = socket.send(&message);
+
+    if sent.is_err() {
+        return false;
+    }
 
     let mut resp = [0; 4096];
 
@@ -77,7 +104,10 @@ fn check_dns_resolution(server: &str) -> bool {
         Err(_) => return false
     };
 
-    let resp = Message::from_slice(&resp[..resp_len]).unwrap();
+    let resp = match Message::from_slice(&resp[..resp_len]) {
+        Ok(resp) => resp,
+        Err(_) => return false
+    };
 
     resp.rcode == Rcode::NoError
 }

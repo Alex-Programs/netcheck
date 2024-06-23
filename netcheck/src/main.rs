@@ -434,7 +434,7 @@ impl App {
         if self.network_info.dns_info.dns_servers.len() == 0 {
             text.push(Line::from("No DNS servers found."));
         } else {
-            text.push(Line::from(vec![Span::styled("Servers:", Style::default().bold())]));
+            text.push(Line::from(vec![Span::styled("Servers (/etc/resolv.conf):", Style::default().bold())]));
 
             for server in &self.network_info.dns_info.dns_servers {
                 let colour = match server.can_resolve {

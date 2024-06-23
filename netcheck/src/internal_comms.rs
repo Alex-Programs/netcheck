@@ -55,6 +55,7 @@ pub struct DHCPInfo {
 #[derive(Debug, Default, Clone)]
 pub struct DNSInfo {
     pub can_fetch: Option<bool>,
+    pub can_bind_interface: Option<bool>,
     pub dns_servers: Vec<DNSServer>,
 }
 
