@@ -6,7 +6,7 @@ use std::sync::mpsc::{Sender, Receiver};
 use pnet;
 use std::process::Command;
 
-pub fn fetch_and_return_local_info(tx: Sender<FetchedDataMessage>, interface: &String) {
+pub fn fetch_and_return_local_info(tx: Sender<FetchedDataMessage>, interface: String) {
     let interfaces = pnet::datalink::interfaces();
     for iface in interfaces {
         if iface.name == *interface {
@@ -17,7 +17,7 @@ pub fn fetch_and_return_local_info(tx: Sender<FetchedDataMessage>, interface: &S
             let subnet_mask = iface.ips[0].prefix().to_string();
 
             // Get gateway
-            let gateway = get_default_gateway(interface);
+            let gateway = get_default_gateway(&interface);
 
             let gateway = match gateway {
                 Ok(gateway) => Some(gateway),

@@ -52,14 +52,16 @@ pub struct DHCPInfo {
     pub dhcp_declared_dns: Option<Vec<String>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DNSInfo {
-    pub primary_dns: Option<String>,
-    pub can_access_primary: Option<bool>,
-    pub secondary_dns: Option<String>,
-    pub can_access_secondary: Option<bool>,
-    pub tertiary_dns: Option<String>,
-    pub can_access_tertiary: Option<bool>,
+    pub can_fetch: Option<bool>,
+    pub dns_servers: Vec<DNSServer>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct DNSServer {
+    pub ip: String,
+    pub can_resolve: Option<bool>,
 }
 
 #[derive(Debug, Default)]

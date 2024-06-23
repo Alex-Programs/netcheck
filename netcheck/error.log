@@ -1,0 +1,90 @@
+warning: unused import: `std::sync::mpsc`
+ --> src/fetch_local.rs:3:5
+  |
+3 | use std::sync::mpsc;
+  |     ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `Receiver`
+ --> src/fetch_local.rs:4:31
+  |
+4 | use std::sync::mpsc::{Sender, Receiver};
+  |                               ^^^^^^^^
+
+warning: unused import: `std::sync::mpsc`
+ --> src/fetch_dns.rs:3:5
+  |
+3 | use std::sync::mpsc;
+  |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `Receiver`
+ --> src/fetch_dns.rs:4:31
+  |
+4 | use std::sync::mpsc::{Sender, Receiver};
+  |                               ^^^^^^^^
+
+warning: unused variable: `interface`
+  --> src/fetch_dns.rs:15:66
+   |
+15 | pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: String) {
+   |                                                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_interface`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `area`
+   --> src/main.rs:325:35
+    |
+325 |     fn render_network_info(&self, area: Rect) -> Paragraph {
+    |                                   ^^^^ help: if this is intentional, prefix it with an underscore: `_area`
+
+warning: multiple variants are never constructed
+  --> src/internal_comms.rs:3:5
+   |
+1  | pub enum FetchedDataMessage {
+   |          ------------------ variants in this enum
+2  |     LocalInfo(LocalInfo),
+3  |     InternetInfo(InternetInfo),
+   |     ^^^^^^^^^^^^
+4  |     DHCPInfo(DHCPInfo),
+   |     ^^^^^^^^
+5  |     DNSInfo(DNSInfo),
+6  |     Traceroute(Traceroute),
+   |     ^^^^^^^^^^
+7  |     TCPInfo(TCPInfo),
+   |     ^^^^^^^
+8  |     HTTPInfo(HTTPInfo),
+   |     ^^^^^^^^
+9  |     HTTPSInfo(HTTPSInfo),
+   |     ^^^^^^^^^
+10 |     UDPInfo(UDPInfo),
+   |     ^^^^^^^
+11 |     NTPInfo(NTPInfo),
+   |     ^^^^^^^
+12 |     QUICInfo(QUICInfo),
+   |     ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: `netcheck` (bin "netcheck") generated 7 warnings (run `cargo fix --bin "netcheck"` to apply 6 suggestions)
+    Finished dev [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/netcheck`
+Connecting to 1.1.1.1
+Connected to 1.1.1.1
+Sent message to 1.1.1.1
+Received response from 1.1.1.1
+Response length: 45
+Response: Message { id: 2508, rd: true, tc: false, aa: false, opcode: Query, qr: Response, rcode: NoError, cd: false, ad: true, z: false, ra: true, questions: [Question { name: "example.com.", type: A, class: Internet }], answers: [Record { name: "example.com.", class: Internet, ttl: 156s, resource: A(93.184.215.14) }], authoritys: [], additionals: [], extension: None, stats: None }
+DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: None }, DNSServer { ip: "127.0.0.1", can_resolve: None }] }
+Connecting to 8.8.8.8
+Connected to 8.8.8.8
+Sent message to 8.8.8.8
+Received response from 8.8.8.8
+Response length: 45
+Response: Message { id: 5209, rd: true, tc: false, aa: false, opcode: Query, qr: Response, rcode: NoError, cd: false, ad: true, z: false, ra: true, questions: [Question { name: "example.com.", type: A, class: Internet }], answers: [Record { name: "example.com.", class: Internet, ttl: 1221s, resource: A(93.184.215.14) }], authoritys: [], additionals: [], extension: None, stats: None }
+DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: Some(true) }, DNSServer { ip: "127.0.0.1", can_resolve: None }] }
+Connecting to 127.0.0.1
+Connected to 127.0.0.1
+Sent message to 127.0.0.1
+Received response from 127.0.0.1
+DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: Some(true) }, DNSServer { ip: "127.0.0.1", can_resolve: Some(false) }] }

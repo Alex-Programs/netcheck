@@ -23,6 +23,7 @@ mod internal_comms;
 use internal_comms::FetchedDataMessage;
 
 mod fetch_local;
+mod fetch_dns;
 
 const BLOCK_HEIGHT: u16 = 10;
 const BLOCK_WIDTH: u16 = 30;
@@ -71,7 +72,6 @@ impl Default for ApplicationStage {
 pub struct App {
     exit: bool,
     network_info: internal_comms::NetworkInfo,
-    throbber_state: throbber_widgets_tui::ThrobberState,
     stage: ApplicationStage,
     interface_list: Vec<String>,
     interface_hover_index: usize,
@@ -91,6 +91,9 @@ impl App {
                         FetchedDataMessage::LocalInfo(local_info) => {
                             self.network_info.local_info = local_info;
                         }
+                        FetchedDataMessage::DNSInfo(dns_info) => {
+                            self.network_info.dns_info = dns_info;
+                        }
                         _ => {}
                     }
                 }
@@ -99,12 +102,6 @@ impl App {
             terminal.draw(|frame| self.render_frame(frame))?;
 
             self.handle_events().wrap_err("handle events failed")?;
-
-            // Update the throbber state
-            self.throbber_state.calc_next();
-
-            // Sleep for 50ms to avoid hogging the CPU
-            std::thread::sleep(std::time::Duration::from_millis(50));
         }
         Ok(())
     }
@@ -243,14 +240,27 @@ impl App {
     }
 
     fn handle_events(&mut self) -> Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => self
-                .handle_key_event(key_event)
-                .wrap_err_with(|| format!("handling key event failed:\n{key_event:#?}")),
-            _ => Ok(()),
+        let now = std::time::Instant::now();
+
+        while now.elapsed() < std::time::Duration::from_millis(50) {
+            match event::poll(std::time::Duration::from_millis(50))? {
+                true => {
+                    return match event::read()? {
+                        // it's important to check that the event is a key press event as
+                        // crossterm also emits key release and repeat events on Windows.
+                        Event::Key(key_event) if key_event.kind == KeyEventKind::Press => self
+                            .handle_key_event(key_event)
+                            .wrap_err_with(|| format!("handling key event failed:\n{key_event:#?}")),
+                        _ => Ok(()),
+                    };
+                }
+                false => {
+                    break;
+                }
+            }
         }
+
+        Ok(())
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
@@ -292,8 +302,15 @@ impl App {
 
         let chosen_interface = self.chosen_interface.clone().unwrap();
 
+        let send_1 = send.clone();
+        let chosen_interface_1 = chosen_interface.clone();
+
         thread::spawn(move || {
-            fetch_local::fetch_and_return_local_info(send, &chosen_interface);
+            fetch_local::fetch_and_return_local_info(send_1, chosen_interface_1);
+        });
+
+        thread::spawn(move || {
+            fetch_dns::fetch_and_return_dns_info(send, chosen_interface);
         });
     }
 
@@ -400,14 +417,46 @@ impl App {
     }
 
     fn render_dns_info(&self, _area: Rect) -> Paragraph {
-        let text = vec![
-            Line::from("Primary DNS: 8.8.8.8"),
-            Line::from("Can Access Primary: Yes"),
-            Line::from("Secondary DNS: 8.8.4.4"),
-            Line::from("Can Access Secondary: Yes"),
-            Line::from("Tertiary DNS: 1.1.1.1"),
-            Line::from("Can Access Tertiary: Yes"),
-        ];
+        if self.network_info.dns_info.can_fetch == None {
+            return Paragraph::new(Text::from(vec![Line::from("Fetching list...")]))
+                .block(Block::default().title("DNS Info").borders(Borders::ALL));
+        }
+
+        if self.network_info.dns_info.can_fetch == Some(false) {
+            return Paragraph::new(Text::from(vec![Line::from("Failed to get list.")]))
+                .block(Block::default().title("DNS Info").borders(Borders::ALL));
+        }
+
+        let mut text = Vec::new();
+
+        let max_width = self.block_width_practice as usize - 2;
+
+        if self.network_info.dns_info.dns_servers.len() == 0 {
+            text.push(Line::from("No DNS servers found."));
+        } else {
+            text.push(Line::from(vec![Span::styled("Servers:", Style::default().bold())]));
+
+            for server in &self.network_info.dns_info.dns_servers {
+                let colour = match server.can_resolve {
+                    Some(true) => Color::Green,
+                    Some(false) => Color::Red,
+                    None => Color::Yellow,
+                };
+
+                let message = match server.can_resolve {
+                    Some(true) => "OK",
+                    Some(false) => "Failure",
+                    None => "Waiting",
+                };
+
+                let padding = max_width.saturating_sub(server.ip.len() + message.len());
+
+                text.push(Line::from(vec![
+                    Span::styled(format!("{}{}{}", server.ip.to_string(), " ".repeat(padding), message), Style::default().fg(colour)),
+                ]));
+            }
+        }
+
         Paragraph::new(Text::from(text))
             .block(Block::default().title("DNS Info").borders(Borders::ALL))
     }
