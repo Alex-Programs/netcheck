@@ -43,6 +43,15 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
         }
     };
 
+    // Eliminate duplicates while preserving order
+    let dns_servers_length = dns_servers.len();
+    let dns_servers = dns_servers.into_iter().fold(Vec::with_capacity(dns_servers_length), |mut acc, x| {
+        if !acc.contains(&x) {
+            acc.push(x);
+        }
+        acc
+    });
+
     let mut dns_info = DNSInfo {
         can_fetch: Some(true),
         can_bind_interface: None,
@@ -57,8 +66,6 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
     // Now start checking if we can resolve DNS through them
 
     for server in dns_servers {
-        let start_time = std::time::Instant::now();
-
         let can_resolve = check_dns_resolution(&server, interface_ip);
 
         if can_resolve == CheckDNSResolutionResponse::CannotBind {
@@ -78,14 +85,6 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
         }
 
         tx.send(FetchedDataMessage::DNSInfo(dns_info.clone())).unwrap();
-
-        // Ensure at least 50ms between checks
-        let min_time = Duration::from_millis(50);
-        let elapsed = start_time.elapsed();
-
-        if elapsed < min_time {
-            std::thread::sleep(min_time - elapsed);
-        }
     }
 }
 
