@@ -422,8 +422,13 @@ impl App {
                 .block(Block::default().title("DNS Info").borders(Borders::ALL));
         }
 
+        if self.network_info.dns_info.can_bind_interface == Some(false) {
+            return Paragraph::new(Text::from(vec![Line::from("Can't bind to interface.")]).bold().red())
+                .block(Block::default().title("DNS Info").borders(Borders::ALL));
+        }
+
         if self.network_info.dns_info.can_fetch == Some(false) {
-            return Paragraph::new(Text::from(vec![Line::from("Failed to get list.")]))
+            return Paragraph::new(Text::from(vec![Line::from("Failed to get list.")]).bold().red())
                 .block(Block::default().title("DNS Info").borders(Borders::ALL));
         }
 

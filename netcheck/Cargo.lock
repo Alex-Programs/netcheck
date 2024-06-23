@@ -738,6 +738,7 @@ dependencies = [
  "ratatui",
  "resolv-conf",
  "rustdns",
+ "socket2",
 ]
 
 [[package]]

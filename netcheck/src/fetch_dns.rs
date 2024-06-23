@@ -4,13 +4,13 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
 
 use rustdns::Message;
-use rustdns::types::*;
-use rustdns::Rcode;
 
 use resolv_conf::Config;
 
-use std::net::UdpSocket;
 use std::time::Duration;
+
+use socket2::{Socket, Domain, Type, Protocol, SockAddr};
+use std::net::{UdpSocket, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use crate::fetch_local::get_interface_ip;
 
@@ -31,6 +31,18 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
 
     let interface_ip = get_interface_ip(&interface);
 
+    let interface_ip = match interface_ip {
+        Ok(interface_ip) => interface_ip,
+        Err(_) => {
+            tx.send(FetchedDataMessage::DNSInfo(DNSInfo {
+                can_fetch: Some(false),
+                can_bind_interface: Some(false),
+                dns_servers: Vec::new(),
+            })).unwrap();
+            return;
+        }
+    };
+
     let mut dns_info = DNSInfo {
         can_fetch: Some(true),
         can_bind_interface: None,
@@ -47,12 +59,20 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
     for server in dns_servers {
         let start_time = std::time::Instant::now();
 
-        let can_resolve = check_dns_resolution(&server);
+        let can_resolve = check_dns_resolution(&server, interface_ip);
+
+        if can_resolve == CheckDNSResolutionResponse::CannotBind {
+            tx.send(FetchedDataMessage::DNSInfo(DNSInfo {
+                can_fetch: Some(false),
+                can_bind_interface: Some(false),
+                dns_servers: Vec::new(),
+            })).unwrap();
+            return;
+        }
 
         for dns_server in dns_info.dns_servers.iter_mut() {
             if dns_server.ip == server {
-                dns_server.can_resolve = Some(can_resolve);
-
+                dns_server.can_resolve = Some(can_resolve == CheckDNSResolutionResponse::Success);
                 break;
             }
         }
@@ -69,47 +89,98 @@ pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: Stri
     }
 }
 
-fn check_dns_resolution(server: &str) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum CheckDNSResolutionResponse {
+    Success,
+    Failure,
+    CannotBind
+}
+
+fn check_dns_resolution(server: &str, ip_addr: IpAddr) -> CheckDNSResolutionResponse {
     // go to example.com and resolve it
     let mut message = Message::default();
-    message.add_question("example.com", Type::A, Class::Internet);
+    message.add_question("example.com", rustdns::Type::A, rustdns::Class::Internet);
 
     let message = message.to_vec().unwrap();
 
-    let socket = match UdpSocket::bind("0.0.0.0:0") {
-        Ok(socket) => socket,
-        Err(_) => return false
+    let socket = match ip_addr.is_ipv4() {
+        true => {
+            // Set bind address to the interface IP
+            let bind_addr = SocketAddr::new(ip_addr, 5000);
+
+            let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP));
+
+            let socket = match socket {
+                Ok(socket) => socket,
+                Err(_) => return CheckDNSResolutionResponse::CannotBind
+            };
+
+            if socket.bind(&SockAddr::from(bind_addr)).is_err() {
+                return CheckDNSResolutionResponse::CannotBind;
+            };
+
+            socket
+        },
+        false => {
+            // Set bind address to the interface IP
+            let bind_addr = SocketAddr::new(ip_addr, 5000);
+
+            let socket = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP));
+
+            let socket = match socket {
+                Ok(socket) => socket,
+                Err(_) => return CheckDNSResolutionResponse::CannotBind
+            };
+
+            if socket.bind(&SockAddr::from(bind_addr)).is_err() {
+                return CheckDNSResolutionResponse::CannotBind;
+            };
+
+            socket
+        }
     };
 
-    if socket.set_read_timeout(Some(Duration::from_secs(1))).is_err() {
-        return false;
-    }
+    // Now send the message
+    let udp_socket = UdpSocket::from(socket);
 
-    if socket.connect(format!("{}:53", server)).is_err() {
-        return false;
-    }
+    // Set a timeout of 1 second
+    if udp_socket.set_read_timeout(Some(Duration::from_secs(1))).is_err() {
+        return CheckDNSResolutionResponse::Failure;
+    };
 
-    let sent = socket.send(&message);
+    let resp =  udp_socket.connect(format!("{}:53", server));
 
-    if sent.is_err() {
-        return false;
-    }
+    match resp {
+        Ok(_) => {},
+        Err(error) => {
+            return CheckDNSResolutionResponse::Failure
+        }
+    };
 
-    let mut resp = [0; 4096];
+    if udp_socket.send(&message).is_err() {
+        return CheckDNSResolutionResponse::Failure;
+    };
 
-    let resp_len = socket.recv(&mut resp);
+    let mut buf = [0u8; 512];
 
-    let resp_len = match resp_len {
+    let resp_len = match udp_socket.recv(&mut buf) {
         Ok(resp_len) => resp_len,
-        Err(_) => return false
+        Err(_) => {
+            return CheckDNSResolutionResponse::Failure
+        }
     };
 
-    let resp = match Message::from_slice(&resp[..resp_len]) {
+    let resp = match Message::from_slice(&buf[..resp_len]) {
         Ok(resp) => resp,
-        Err(_) => return false
+        Err(_) => {
+            return CheckDNSResolutionResponse::Failure
+        }
     };
 
-    resp.rcode == Rcode::NoError
+    match resp.rcode == rustdns::Rcode::NoError {
+        true => CheckDNSResolutionResponse::Success,
+        false => CheckDNSResolutionResponse::Failure
+    }
 }
 
 fn get_dns_servers() -> Result<Vec<String>, ()> {

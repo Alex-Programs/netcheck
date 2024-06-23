@@ -1,5 +1,6 @@
 use crate::internal_comms::{LocalInfo, FetchedDataMessage};
 
+use std::net::IpAddr;
 use std::sync::mpsc;
 use std::sync::mpsc::{Sender, Receiver};
 
@@ -35,11 +36,11 @@ pub fn fetch_and_return_local_info(tx: Sender<FetchedDataMessage>, interface: St
     }
 }
 
-pub fn get_interface_ip(interface: &String) -> Result<String, ()> {
+pub fn get_interface_ip(interface: &String) -> Result<IpAddr, ()> {
     let interfaces = pnet::datalink::interfaces();
     for iface in interfaces {
         if iface.name == *interface {
-            return Ok(iface.ips[0].ip().to_string());
+            return Ok(iface.ips[0].ip());
         }
     }
 

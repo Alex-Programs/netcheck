@@ -1,15 +1,16 @@
+   Compiling netcheck v0.1.0 (/home/alex/programming/netcheck/netcheck)
 warning: unused import: `std::sync::mpsc`
- --> src/fetch_local.rs:3:5
+ --> src/fetch_local.rs:4:5
   |
-3 | use std::sync::mpsc;
+4 | use std::sync::mpsc;
   |     ^^^^^^^^^^^^^^^
   |
   = note: `#[warn(unused_imports)]` on by default
 
 warning: unused import: `Receiver`
- --> src/fetch_local.rs:4:31
+ --> src/fetch_local.rs:5:31
   |
-4 | use std::sync::mpsc::{Sender, Receiver};
+5 | use std::sync::mpsc::{Sender, Receiver};
   |                               ^^^^^^^^
 
 warning: unused import: `std::sync::mpsc`
@@ -24,18 +25,59 @@ warning: unused import: `Receiver`
 4 | use std::sync::mpsc::{Sender, Receiver};
   |                               ^^^^^^^^
 
-warning: unused variable: `interface`
-  --> src/fetch_dns.rs:15:66
+warning: unused imports: `Ipv4Addr`, `Ipv6Addr`
+  --> src/fetch_dns.rs:13:35
    |
-15 | pub fn fetch_and_return_dns_info(tx: Sender<FetchedDataMessage>, interface: String) {
-   |                                                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_interface`
+13 | use std::net::{UdpSocket, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+   |                                   ^^^^^^^^  ^^^^^^^^
+
+warning: unreachable statement
+   --> src/fetch_dns.rs:108:5
+    |
+106 |       return CheckDNSResolutionResponse::CannotBind;
+    |       --------------------------------------------- any code following this expression is unreachable
+107 |
+108 | /     let socket = match ip_addr.is_ipv4() {
+109 | |         true => {
+110 | |             // Set bind address to the interface IP
+111 | |             let bind_addr = SocketAddr::new(ip_addr, 5000);
+...   |
+142 | |         }
+143 | |     };
+    | |______^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` on by default
+
+warning: unused variable: `message`
+   --> src/fetch_dns.rs:104:9
+    |
+104 |     let message = message.to_vec().unwrap();
+    |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_message`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `error`
+   --> src/fetch_dns.rs:157:13
+    |
+157 |         Err(error) => {
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_error`
+
+warning: unused variable: `server`
+  --> src/fetch_dns.rs:99:25
    |
-   = note: `#[warn(unused_variables)]` on by default
+99 | fn check_dns_resolution(server: &str, ip_addr: IpAddr) -> CheckDNSResolutionResponse {
+   |                         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_server`
+
+warning: unused variable: `ip_addr`
+  --> src/fetch_dns.rs:99:39
+   |
+99 | fn check_dns_resolution(server: &str, ip_addr: IpAddr) -> CheckDNSResolutionResponse {
+   |                                       ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_ip_addr`
 
 warning: unused variable: `area`
-   --> src/main.rs:325:35
+   --> src/main.rs:321:35
     |
-325 |     fn render_network_info(&self, area: Rect) -> Paragraph {
+321 |     fn render_network_info(&self, area: Rect) -> Paragraph {
     |                                   ^^^^ help: if this is intentional, prefix it with an underscore: `_area`
 
 warning: multiple variants are never constructed
@@ -66,25 +108,6 @@ warning: multiple variants are never constructed
    |
    = note: `#[warn(dead_code)]` on by default
 
-warning: `netcheck` (bin "netcheck") generated 7 warnings (run `cargo fix --bin "netcheck"` to apply 6 suggestions)
-    Finished dev [unoptimized + debuginfo] target(s) in 0.09s
+warning: `netcheck` (bin "netcheck") generated 12 warnings (run `cargo fix --bin "netcheck"` to apply 10 suggestions)
+    Finished dev [unoptimized + debuginfo] target(s) in 1.84s
      Running `target/debug/netcheck`
-Connecting to 1.1.1.1
-Connected to 1.1.1.1
-Sent message to 1.1.1.1
-Received response from 1.1.1.1
-Response length: 45
-Response: Message { id: 2508, rd: true, tc: false, aa: false, opcode: Query, qr: Response, rcode: NoError, cd: false, ad: true, z: false, ra: true, questions: [Question { name: "example.com.", type: A, class: Internet }], answers: [Record { name: "example.com.", class: Internet, ttl: 156s, resource: A(93.184.215.14) }], authoritys: [], additionals: [], extension: None, stats: None }
-DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: None }, DNSServer { ip: "127.0.0.1", can_resolve: None }] }
-Connecting to 8.8.8.8
-Connected to 8.8.8.8
-Sent message to 8.8.8.8
-Received response from 8.8.8.8
-Response length: 45
-Response: Message { id: 5209, rd: true, tc: false, aa: false, opcode: Query, qr: Response, rcode: NoError, cd: false, ad: true, z: false, ra: true, questions: [Question { name: "example.com.", type: A, class: Internet }], answers: [Record { name: "example.com.", class: Internet, ttl: 1221s, resource: A(93.184.215.14) }], authoritys: [], additionals: [], extension: None, stats: None }
-DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: Some(true) }, DNSServer { ip: "127.0.0.1", can_resolve: None }] }
-Connecting to 127.0.0.1
-Connected to 127.0.0.1
-Sent message to 127.0.0.1
-Received response from 127.0.0.1
-DNS Info: DNSInfo { can_fetch: Some(true), dns_servers: [DNSServer { ip: "1.1.1.1", can_resolve: Some(true) }, DNSServer { ip: "8.8.8.8", can_resolve: Some(true) }, DNSServer { ip: "127.0.0.1", can_resolve: Some(false) }] }
